@@ -3,13 +3,12 @@ package dk.madslee.imageSequence;
 import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.common.MapBuilder;
-
 import com.facebook.react.uimanager.SimpleViewManager;
 import com.facebook.react.uimanager.ThemedReactContext;
 import com.facebook.react.uimanager.annotations.ReactProp;
 
-import java.util.ArrayList;
 import java.util.Map;
+import java.util.ArrayList;
 
 
 public class RCTImageSequenceManager extends SimpleViewManager<RCTImageSequenceView> {
@@ -31,6 +30,16 @@ public class RCTImageSequenceManager extends SimpleViewManager<RCTImageSequenceV
     @ReactProp(name = "height")
     public void setHeight(final RCTImageSequenceView view, Integer height) {
         view.setHeight(height);
+    }
+
+    public Map getExportedCustomBubblingEventTypeConstants() {
+        return MapBuilder.builder()
+            .put(
+                "onEnd",
+                MapBuilder.of(
+                    "phasedRegistrationNames",
+                    MapBuilder.of("bubbled", "onEnd")))
+                    .build();
     }
 
     /**
@@ -68,15 +77,5 @@ public class RCTImageSequenceManager extends SimpleViewManager<RCTImageSequenceV
     @ReactProp(name = "loop")
     public void setLoop(final RCTImageSequenceView view, Boolean loop) {
         view.setLoop(loop);
-    }
-
-    public Map getExportedCustomBubblingEventTypeConstants() {
-        return MapBuilder.builder()
-            .put(
-                "onEnd",
-                MapBuilder.of(
-                    "phasedRegistrationNames",
-                    MapBuilder.of("bubbled", "onEnd")))
-                    .build();
     }
 }
