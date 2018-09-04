@@ -223,13 +223,12 @@ public class RCTImageSequenceView extends ImageView {
             public void run()  {
                 try  { Thread.sleep( (bitmaps.size() / framesPerSecond) * 1000 + 500 ); }
                 catch (InterruptedException ie)  {}
-                myHashSet.add( foo );
+                ReactContext reactContext = (ReactContext)getContext();
+                reactContext.getJSModule(RCTEventEmitter.class).receiveEvent(
+                    getId(),
+                    "onEnd",
+                    null);
             }
         } ).start();
-        ReactContext reactContext = (ReactContext)getContext();
-        reactContext.getJSModule(RCTEventEmitter.class).receiveEvent(
-            getId(),
-            "onEnd",
-            null);
     }
 }
