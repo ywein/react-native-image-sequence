@@ -6,8 +6,8 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.AnimationDrawable;
 import android.graphics.drawable.BitmapDrawable;
-import android.os.AsyncTask;
 import android.util.Log;
+import android.os.AsyncTask;
 import android.widget.ImageView;
 
 import com.facebook.react.bridge.ReactContext;
@@ -23,15 +23,18 @@ import java.util.concurrent.RejectedExecutionException;
 
 public class RCTImageSequenceView extends ImageView {
     private Integer framesPerSecond = 24;
-    private Integer width = null;
     private Integer height = null;
+    private Integer width = null;
+    private Boolean started = false;
     private Boolean loop = true;
+    private ArrayList<String> uris = null;
     private ArrayList<AsyncTask> activeTasks;
     private HashMap<Integer, Bitmap> bitmaps;
     private RCTResourceDrawableIdHelper resourceDrawableIdHelper;
 
     public RCTImageSequenceView(Context context) {
         super(context);
+
         resourceDrawableIdHelper = new RCTResourceDrawableIdHelper();
     }
 
@@ -39,11 +42,15 @@ public class RCTImageSequenceView extends ImageView {
         private final Integer index;
         private final String uri;
         private final Context context;
+        private Integer height = null;
+        private Integer width = null;
 
-        public DownloadImageTask(Integer index, String uri, Context context) {
+        public DownloadImageTask(Integer index, String uri, Context context, Integer width, Integer height) {
             this.index = index;
             this.uri = uri;
             this.context = context;
+            this.width = width;
+            this.height = height;
         }
 
         @Override
@@ -57,13 +64,7 @@ public class RCTImageSequenceView extends ImageView {
 
 
         private Bitmap loadBitmapByLocalResource(String uri) {
-            BitmapFactory.Options options = new BitmapFactory.Options();
-            options.inJustDecodeBounds = true;
-            Bitmap bitmap = BitmapFactory.decodeResource(this.context.getResources(), resourceDrawableIdHelper.getResourceDrawableId(this.context, uri));
-            int imageHeight = options.outHeight;
-            int imageWidth = options.outWidth;
-            String imageType = options.outMimeType;
-            return decodeSampledBitmapFromResource(this.context.getResources(), resourceDrawableIdHelper.getResourceDrawableId(this.context, uri), width, height);
+            return decodeSampledBitmapFromResource(this.context.getResources(), resourceDrawableIdHelper.getResourceDrawableId(this.context, uri), this.width, this.height);
         }
 
         private Bitmap loadBitmapByExternalURL(String uri) {
@@ -87,8 +88,6 @@ public class RCTImageSequenceView extends ImageView {
         }
     }
 
-    
-
     private void onTaskCompleted(DownloadImageTask downloadImageTask, Integer index, Bitmap bitmap) {
         if (index == 0) {
             // first image should be displayed as soon as possible.
@@ -101,64 +100,6 @@ public class RCTImageSequenceView extends ImageView {
         if (activeTasks.isEmpty()) {
             setupAnimationDrawable();
         }
-    }
-
-    public void setWidth(Integer width) {
-        this.width = width;
-    }
-
-    public void setHeight(Integer height) {
-        this.height = height;
-    }
-
-    public void setImages(ArrayList<String> uris) {
-        if (isLoading()) {
-            // cancel ongoing tasks (if still loading previous images)
-            for (int index = 0; index < activeTasks.size(); index++) {
-                activeTasks.get(index).cancel(true);
-            }
-        }
-
-        activeTasks = new ArrayList<>(uris.size());
-        bitmaps = new HashMap<>(uris.size());
-
-        for (int index = 0; index < uris.size(); index++) {
-            DownloadImageTask task = new DownloadImageTask(index, uris.get(index), getContext());
-            activeTasks.add(task);
-
-            try {
-                task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-            } catch (RejectedExecutionException e){
-                Log.e("react-native-image-sequence", "DownloadImageTask failed" + e.getMessage());
-                break;
-            }
-        }
-    }
-
-    public void setFramesPerSecond(Integer framesPerSecond) {
-        this.framesPerSecond = framesPerSecond;
-
-        // updating frames per second, results in building a new AnimationDrawable (because we cant alter frame duration)
-        if (isLoaded()) {
-            setupAnimationDrawable();
-        }
-    }
-
-    public void setLoop(Boolean loop) {
-        this.loop = loop;
-
-        // updating looping, results in building a new AnimationDrawable
-        if (isLoaded()) {
-            setupAnimationDrawable();
-        }
-    }
-
-    private boolean isLoaded() {
-        return !isLoading() && bitmaps != null && !bitmaps.isEmpty();
-    }
-
-    private boolean isLoading() {
-        return activeTasks != null && !activeTasks.isEmpty();
     }
 
     public static int calculateInSampleSize(
@@ -200,12 +141,76 @@ public class RCTImageSequenceView extends ImageView {
         return BitmapFactory.decodeResource(res, resId, options);
     }
 
+    public void setImages(ArrayList<String> uris) {
+        this.uris = uris;
+        if (this.height == null || this.width == null) return;
+        this.started = true;
+        if (isLoading()) {
+            // cancel ongoing tasks (if still loading previous images)
+            for (int index = 0; index < activeTasks.size(); index++) {
+                activeTasks.get(index).cancel(true);
+            }
+        }
+
+        activeTasks = new ArrayList<>(uris.size());
+        bitmaps = new HashMap<>(uris.size());
+
+        for (int index = 0; index < uris.size(); index++) {
+            DownloadImageTask task = new DownloadImageTask(index, uris.get(index), getContext(), this.width, this.height);
+            activeTasks.add(task);
+
+            try {
+                task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+            } catch (RejectedExecutionException e){
+                Log.e("react-native-image-sequence", "DownloadImageTask failed" + e.getMessage());
+                break;
+            }
+        }
+    }
+
+    public void setHeight(Integer height) {
+        this.height = height;
+        if (!this.started && this.uris != null) {
+            this.setImages(this.uris);
+        }
+    }
+
+    public void setWidth(Integer width) {
+        this.width = width;
+        if (!this.started && this.uris != null) {
+            this.setImages(this.uris);
+        }
+    }
+
+    public void setFramesPerSecond(Integer framesPerSecond) {
+        this.framesPerSecond = framesPerSecond;
+
+        // updating frames per second, results in building a new AnimationDrawable (because we cant alter frame duration)
+        if (isLoaded()) {
+            setupAnimationDrawable();
+        }
+    }
+
+    public void setLoop(Boolean loop) {
+        this.loop = loop;
+
+        // updating looping, results in building a new AnimationDrawable
+        if (isLoaded()) {
+            setupAnimationDrawable();
+        }
+    }
+
+    private boolean isLoaded() {
+        return !isLoading() && bitmaps != null && !bitmaps.isEmpty();
+    }
+
+    private boolean isLoading() {
+        return activeTasks != null && !activeTasks.isEmpty();
+    }
+
     private void setupAnimationDrawable() {
         AnimationDrawable animationDrawable = new AnimationDrawable();
-
-
         for (int index = 0; index < bitmaps.size(); index++) {
-            Bitmap bitmap = bitmaps.get(index);
             BitmapDrawable drawable = new BitmapDrawable(this.getResources(), bitmaps.get(index));
             animationDrawable.addFrame(drawable, 1000 / framesPerSecond);
         }
@@ -214,21 +219,17 @@ public class RCTImageSequenceView extends ImageView {
 
         this.setImageDrawable(animationDrawable);
         animationDrawable.start();
-
         new Thread( new Runnable() {
             public void run()  {
-                try  { Thread.sleep( bitmaps.size() * (1000 / framesPerSecond) + 500 ); }
+                try  { Thread.sleep( (bitmaps.size() / framesPerSecond) * 1000 + 500 ); }
                 catch (InterruptedException ie)  {}
-                // WritableMap event = Arguments.createMap();
-                // event.putString("message", true);
-                ReactContext reactContext = (ReactContext)getContext();
-                reactContext.getJSModule(RCTEventEmitter.class).receiveEvent(
-                getId(),
-                "onEnd",
-                null);
+                myHashSet.add( foo );
             }
         } ).start();
-
-        
+        ReactContext reactContext = (ReactContext)getContext();
+        reactContext.getJSModule(RCTEventEmitter.class).receiveEvent(
+            getId(),
+            "onEnd",
+            null);
     }
 }
